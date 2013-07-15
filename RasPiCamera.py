@@ -1,6 +1,9 @@
 import gdata.photos.service
-import datetime
+import datetime, time
 import ConfigParser
+
+import subprocess
+from subprocess import call
 
 
 config = ConfigParser.ConfigParser()
@@ -16,20 +19,21 @@ start_time = datetime.datetime.now().time().hour
 cur_time = datetime.datetime.now().time().hour
 
 
-while (cur_time - start_time < loop_hrs):
+picasa = gdata.photos.service.PhotosService(email=email,password=password)
+picasa.ProgrammaticLogin()
+#album = picasa.InsertAlbum(title="Python Test", summary="test summary", access="private")
 
-    picasa = gdata.photos.service.PhotosService(email=email,password=password)
-    picasa.ProgrammaticLogin()
-    #album = picasa.InsertAlbum(title="Python Test", summary="test summary", access="private")
-
-    albums = picasa.GetUserFeed(user=username)
-    for album in albums.entry:
-      if album.title.text==album_name:
-        album_url = '/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text)
-
-    filename  = "/home/gman/Development/gdata/MonkeyG.sketch.png"
-    photo = picasa.InsertPhotoSimple(album_url,'New Photo','',filename,content_type='image/jpeg')
+albums = picasa.GetUserFeed(user=username)
+for album in albums.entry:
+  if album.title.text==album_name:
+    album_url = '/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text)
     
+filename  = "/tmp/rpiTmp.jpg"
+
+while (cur_time - start_time < loop_hrs):
+    call(["raspistill -rot 180 -w 2048 -o " + filename ], shell=True)
+    photo = picasa.InsertPhotoSimple(album_url,'New Photo','',filename,content_type='image/jpeg')
     cur_time = datetime.datetime.now().time().hour
+    time.sleep(10)
 
 

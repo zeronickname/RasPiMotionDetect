@@ -1,0 +1,6 @@
+* WIP *
+An intervalometer and uploads a picture to your Picasa/GooglePlus Photos account from a raspberryPi camera module
+
+Picasa was chosen as an endpoint because
+(a) photos <5Mb do not count towards your storage
+(b) google automatically stitches photos together to create an animated gif

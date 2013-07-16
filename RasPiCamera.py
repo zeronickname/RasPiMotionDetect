@@ -1,5 +1,5 @@
 import gdata.photos.service
-import datetime, time
+import datetime, time, os
 import ConfigParser
 
 import subprocess
@@ -7,14 +7,14 @@ from subprocess import call
 
 
 config = ConfigParser.ConfigParser()
-config.read('login.ini')
+config.read(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'login.ini'))
 
 email    = config.get('DEFAULT','email')
 password = config.get('DEFAULT','password')
 username = config.get('DEFAULT','username')
 album_name = config.get('DEFAULT','album_name')
-loop_hrs = config.get('DEFAULT','hrs_to_loop')
-interval = config.get('DEFAULT','interval')
+loop_hrs = config.getint('DEFAULT','hrs_to_loop')
+interval = config.getint('DEFAULT','interval')
 
 # it takes 5-6 seconds to actually take a picture. Compensate for that
 if (interval >6 ):

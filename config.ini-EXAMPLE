@@ -9,3 +9,4 @@ interval = 15 ; this is approximate and a minimum time in seconds
 album_name = Test Album
 threshold = 10
 sensitivity = 180
+forceCaptureTime = 3600 ; Forces an image to be captured every x seconds

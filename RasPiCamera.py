@@ -1,5 +1,5 @@
 import gdata.photos.service
-import datetime, time, os, StringIO, subprocess
+import time, os, StringIO, subprocess
 import ConfigParser
 from PIL import Image
 
@@ -23,9 +23,11 @@ def captureTestImage():
     return im, buffer
 
 # capture and upload a full size image to Picasa
-def uploadImage():
+def uploadImage(picasa, album_url):
+    filename  = "/tmp/rpiTmp.jpg"
     call(["raspistill -rot 180 -w 2048 -o " + filename ], shell=True)
     photo = picasa.InsertPhotoSimple(album_url,'New Photo','',filename,content_type='image/jpeg')
+
 
 
 
@@ -54,8 +56,8 @@ def main():
     forceCaptureTime = config.getint('CONFIG','forceCaptureTime')
 
 
-    start_time = datetime.datetime.now().time().hour 
-    cur_time = datetime.datetime.now().time().hour
+    start_time = datetime.now().time().hour 
+    cur_time = datetime.now().time().hour
 
     picasa = gdata.photos.service.PhotosService(email=email,password=password)
     picasa.ProgrammaticLogin()
@@ -66,8 +68,6 @@ def main():
       if album.title.text==album_name:
         album_url = '/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text)
         
-    filename  = "/tmp/rpiTmp.jpg"
-
     #get an image to kick the process off with
     image1, buffer1 = captureTestImage()
 
@@ -93,7 +93,7 @@ def main():
             # Exit before full image scan complete
             if changedPixels > sensitivity:
                 lastCapture = time.time()
-                uploadImage()
+                uploadImage(picasa, album_url)
                 break
             continue    
         
@@ -105,7 +105,7 @@ def main():
         image1  = image2
         buffer1 = buffer2
         
-        cur_time = datetime.datetime.now().time().hour
+        cur_time = datetime.now().time().hour
 
 
 if __name__ == '__main__':

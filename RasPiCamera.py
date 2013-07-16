@@ -1,20 +1,24 @@
 import gdata.photos.service
-import datetime, time, os
+import datetime, time, os, StringIO, subprocess
 import ConfigParser
+from PIL import Image
 
-import subprocess
 from subprocess import call
+from datetime import datetime
 
 
 config = ConfigParser.ConfigParser()
-config.read(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'login.ini'))
+config.read(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'config.ini'))
 
-email    = config.get('DEFAULT','email')
-password = config.get('DEFAULT','password')
-username = config.get('DEFAULT','username')
-album_name = config.get('DEFAULT','album_name')
-loop_hrs = config.getint('DEFAULT','hrs_to_loop')
-interval = config.getint('DEFAULT','interval')
+email    = config.get('LOGIN','email')
+password = config.get('LOGIN','password')
+username = config.get('LOGIN','username')
+
+album_name = config.get('CONFIG','album_name')
+loop_hrs = config.getint('CONFIG','hrs_to_loop')
+interval = config.getint('CONFIG','interval')
+threshold = config.getint('CONFIG','picture_threshold')
+sensitivity = config.getint('CONFIG','picture_sensitivity')
 
 # it takes 5-6 seconds to actually take a picture. Compensate for that
 if (interval >6 ):

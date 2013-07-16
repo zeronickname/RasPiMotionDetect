@@ -1,8 +1,11 @@
-[DEFAULT]
+[LOGIN]
 email    = user.name@gmail.com
 username = user.name
 password = password
-hrs_to_loop = 9 ;this is approximate and can be upto 1hr out
-interval = 15 ; this is approximate and a minimum time
-album_name = Test Album
 
+[CONFIG]
+hrs_to_loop = 9 ;this is approximate and can be upto 1hr out
+interval = 15 ; this is approximate and a minimum time in seconds
+album_name = Test Album
+threshold = 10
+sensitivity = 180

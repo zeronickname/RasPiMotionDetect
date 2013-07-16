@@ -1,6 +1,11 @@
 * WIP *
-An intervalometer and uploads a picture to your Picasa/GooglePlus Photos account from a raspberryPi camera module
+No matter what the project title says, this is *not* an intervalometer :)
+It started off as one (check the history), but I pretty quickly came to the conclusion that without motion detection, a naive implementation of an intervalometer is kindof useless. You just wind up with either a lot of pictures, or you miss the really important ones.
 
-Picasa was chosen as an endpoint because
-(a) photos <5Mb do not count towards your storage
-(b) google automatically stitches photos together to create an animated gif
+So, this script now has some configurable parameters to tweak the motion sensitivity and as long as there is movement, it takes and uploads pics continuously to Picasa/Google Plus Photos.
+
+
+Picasa was chosen as an endpoint because photos <5Mpx do not count towards your storage
+
+TODO:
+Make the picasa photo upload into a seperate thread so as not to block taking of more pictures

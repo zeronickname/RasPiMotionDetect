@@ -1,14 +1,29 @@
+# original motion detection code from 
+# http://www.raspberrypi.org/phpBB3/viewtopic.php?p=358259#p362915
+
+
 import gdata.photos.service
 import time, os, StringIO, subprocess
 import ConfigParser
 from PIL import Image
+import threading, Queue
 
 from subprocess import call
 from datetime import datetime
 
 
-# original code from 
-# http://www.raspberrypi.org/phpBB3/viewtopic.php?p=358259#p362915
+class background_upload(threading.Thread):
+    def __init__ (self, picasa, album_url, q):
+        self.picasa = picasa
+        self.album_url = album_url
+        self.q = q
+        threading.Thread.__init__ (self)
+        self.daemon = True
+   
+    def run(self):
+        while True:
+            filename = self.q.get()
+            photo = self.picasa.InsertPhotoSimple(self.album_url,'New Photo','',filename,content_type='image/jpeg')
 
 
 # Capture a small test image (for motion detection)
@@ -23,13 +38,12 @@ def captureTestImage():
     return im, buffer
 
 # capture and upload a full size image to Picasa
-def uploadImage(picasa, album_url):
-    filename  = "/tmp/rpiTmp.jpg"
-    call(["raspistill -rot 180 -w 2048 -o " + filename ], shell=True)
-    photo = picasa.InsertPhotoSimple(album_url,'New Photo','',filename,content_type='image/jpeg')
-
-
-
+def uploadImage(queue):
+    command = "raspistill -rot 180 -w 2048 -o -"
+    imageData = StringIO.StringIO()
+    imageData.write(subprocess.check_output(command, shell=True))
+    imageData.seek(0)
+    queue.put(imageData)
 
 
 def main():
@@ -44,12 +58,8 @@ def main():
     album_name = config.get('CONFIG','album_name')
     loop_hrs = config.getint('CONFIG','hrs_to_loop')
 
+    # currently unused. Maybe useful at come later point.
     interval = config.getint('CONFIG','interval')
-    # it takes 5-6 seconds to actually take a picture. Compensate for that
-    if (interval >6 ):
-        interval -= 6
-    else:
-        interval = 1
         
     threshold = config.getint('CONFIG','picture_threshold')
     sensitivity = config.getint('CONFIG','picture_sensitivity')
@@ -64,9 +74,15 @@ def main():
     #album = picasa.InsertAlbum(title="Python Test", summary="test summary", access="private")
 
     albums = picasa.GetUserFeed(user=username)
+       
     for album in albums.entry:
       if album.title.text==album_name:
         album_url = '/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text)
+    
+    upload_queue = Queue.Queue()
+    uploadThread = background_upload(picasa, album_url, upload_queue)
+    uploadThread.start()
+    
         
     #get an image to kick the process off with
     image1, buffer1 = captureTestImage()
@@ -93,7 +109,7 @@ def main():
             # Exit before full image scan complete
             if changedPixels > sensitivity:
                 lastCapture = time.time()
-                uploadImage(picasa, album_url)
+                uploadImage(upload_queue)
                 break
             continue    
         

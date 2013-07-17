@@ -28,14 +28,13 @@ class background_upload(threading.Thread):
 
 # Capture a small test image (for motion detection)
 def captureTestImage():
-    command = "raspistill -w %s -h %s -t 0 -e bmp -o -" % (100, 75)
+    command = "raspistill -rot 180 -w %s -h %s -t 0 -e bmp -o -" % (100, 75)
     imageData = StringIO.StringIO()
     imageData.write(subprocess.check_output(command, shell=True))
     imageData.seek(0)
     im = Image.open(imageData)
     buffer = im.load()
-    imageData.close()
-    return im, buffer
+    return im, buffer, imageData
 
 # capture and upload a full size image to Picasa
 def uploadImage(queue):
@@ -85,7 +84,7 @@ def main():
     
         
     #get an image to kick the process off with
-    image1, buffer1 = captureTestImage()
+    image1, buffer1, imd = captureTestImage()
 
     # Reset last capture time
     lastCapture = time.time()
@@ -93,7 +92,7 @@ def main():
 
     while (cur_time - start_time < loop_hrs):
         # Get comparison image
-        image2, buffer2 = captureTestImage()
+        image2, buffer2, imd = captureTestImage()
         
         # Count changed pixels
         changedPixels = 0
@@ -108,6 +107,8 @@ def main():
             # If movement sensitivity exceeded, upload image and
             # Exit before full image scan complete
             if changedPixels > sensitivity:
+                # the test image is quite low res, but we might as well upload it
+                upload_queue.put(imd)
                 lastCapture = time.time()
                 uploadImage(upload_queue)
                 break

@@ -1,8 +1,7 @@
 Intro
 -----
 
-No matter what the project title says, this is *not* an intervalometer :)
-It started off as one (check the history), but I pretty quickly came to the conclusion that without motion detection, a naive implementation of an intervalometer is kindof useless. You just wind up with either a lot of pictures, or you miss the really important ones.
+This started off as a simple Intervalometer, but I pretty quickly came to the conclusion that without motion detection, a naive implementation of an intervalometer is kindof useless. You just wind up with either a lot of pictures, or you miss the really important ones.
 
 So, this script now has some configurable parameters to tweak the motion sensitivity and as long as there is movement, it takes and uploads pics continuously to Picasa/Google Plus Photos.
 

@@ -111,7 +111,7 @@ def captureTestImage(rotation):
     temp_file.seek(0)
     im = Image.open(temp_file)
     buffer = im.load()
-    return im, buffer, temp_file
+    return buffer, temp_file
 
 # capture and upload a full size image to Picasa
 def uploadImage(queue, rotation, upload_quality):
@@ -186,7 +186,7 @@ def main():
         
 
     #get an image to kick the process off with
-    image1, buffer1, file_handle = captureTestImage(config.rotation)
+    buffer1, file_handle = captureTestImage(config.rotation)
 
     # Reset last capture time
     lastCapture = time.time()
@@ -199,7 +199,7 @@ def main():
         # Get comparison image
         logging.debug("Current queue size FullUp:%d ThumbUp:%d" % \
                                 (upload_queue.qsize(), upload_queue_thumbs.qsize()))
-        image2, buffer2, file_handle = captureTestImage(config.rotation)
+        buffer2, file_handle = captureTestImage(config.rotation)
         
         # Count changed pixels
         changedPixels = 0
@@ -228,7 +228,6 @@ def main():
             changedPixels = config.sensitivity + 1            
 
         # Swap comparison buffers
-        image1  = image2
         buffer1 = buffer2
         
         cur_time = datetime.now().time().hour

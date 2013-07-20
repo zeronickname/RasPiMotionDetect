@@ -14,10 +14,16 @@ PreRequisites:
 
 * RaspberryPi with a camera board :)
 * raspistill application
+
         http://www.raspberrypi.org/camera
+        
 * Python 2.x
 * PIL
+
         apt-get install python-imaging
+        
 * gdata-python-client
+
         Download and install from: https://developers.google.com/gdata/articles/python_client_lib#library
+        
 

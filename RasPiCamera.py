@@ -13,12 +13,13 @@ from datetime import datetime
 
 # thread that runs in the background uploading pics to Picasa
 class background_upload(threading.Thread):
-    def __init__ (self, picasa, album_url, q):
+    def __init__ (self, picasa, album_url, q, myname):
         self.picasa = picasa
         self.album_url = album_url
         self.q = q
         threading.Thread.__init__ (self)
         self.daemon = True
+        self.myname = myname
 
     def check_type(self, filehandle):
         extension = os.path.splitext(filehandle.name)[1][1:]
@@ -32,17 +33,16 @@ class background_upload(threading.Thread):
 
     def run(self):
         while True:
-            logging.debug("Wait on queue")
+            logging.debug("%s Wait on queue" % self.myname)
             filehandle = self.q.get()
-            logging.debug("popped one off the queue")
-            pic_type='image/jpeg'
+            logging.debug("%s: popped one off the queue" % self.myname)
             pic_type = self.check_type(filehandle)
             photo = self.picasa.InsertPhotoSimple(self.album_url,
                                                   'Movement Detected',
                                                   '',
                                                   filehandle,
                                                   content_type=pic_type)
-            logging.debug("Pic uploaded to Picasa")
+            logging.debug("%s: Pic uploaded to Picasa" % self.myname)
 
 
 # reads config parameters from config.ini
@@ -65,10 +65,43 @@ class ConfigRead:
         self.threshold = config.getint('CONFIG','picture_threshold')
         self.sensitivity = config.getint('CONFIG','picture_sensitivity')
         self.forceCaptureTime = config.getint('CONFIG','forceCaptureTime')
+        self.upload_scratch_pics = config.getboolean('CONFIG','upload_scratch_pics')
 
         self.upload_quality = config.getint('PICTURE','upload_quality')
         self.rotation = config.getint('PICTURE','camera_rotation')
 
+# This class handles the gdata login + album id extraction gubbins
+class PicasaLogin:
+    def __init__(self, email, password, username):
+        self.username = username
+
+        try:
+            self.picasa = gdata.photos.service.PhotosService(email=email,
+                                                password=password)
+            self.picasa.ProgrammaticLogin()
+        except GooglePhotosException as gpe:
+            logging.critical("Picasa Login failed!")
+            sys.exit(gpe.message)
+    
+    def get_album_url(self, album_name):
+        albums = self.picasa.GetUserFeed(user=self.username)
+        album_url = None
+           
+        for album in albums.entry:
+          if album.title.text==album_name:
+            album_url = '/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text)
+        
+        # if the album does not exist, create it!    
+        if (album_url == None):
+            logging.info('Creating Album: %s ' % album_name)
+            try:
+                album = self.picasa.InsertAlbum(title=album_name, summary="",access='private')
+                album_url = '/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text)
+            except GooglePhotosException as gpe:
+                logging.critical("Album creation failed!")
+                sys.exit(gpe.message)
+
+        return album_url
 
 # Capture a small test image (for motion detection)
 def captureTestImage(rotation):
@@ -82,7 +115,8 @@ def captureTestImage(rotation):
 
 # capture and upload a full size image to Picasa
 def uploadImage(queue, rotation, upload_quality):
-    command = "raspistill -rot %s -w 2048 -h 1536 -t 0 -e jpg -q %s -o -" % (rotation, upload_quality)
+    command = "raspistill -rot %s -w 2048 -h 1536 -t 0 -e jpg -q %s -o -" % \
+                                                            (rotation, upload_quality)
     temp_file = tempfile.NamedTemporaryFile(suffix='.jpg')
     temp_file.write(subprocess.check_output(command, shell=True))
     temp_file.seek(0)
@@ -116,6 +150,8 @@ def main():
     loglvl_setup()
     
     logging.debug("Starting up....")
+    # config.ini should be in the same location as the script
+    # get script path with some os.path hackery
     config = ConfigRead(os.path.join(
                         os.path.dirname(
                         os.path.realpath(
@@ -126,21 +162,29 @@ def main():
     cur_time = datetime.now().time().hour
 
     logging.debug("Login to Picasa")
-    picasa = gdata.photos.service.PhotosService(email=config.email,
-                                                password=config.password)
-    picasa.ProgrammaticLogin()
+    gdata_login = PicasaLogin(config.email, config.password, config.username)
+    album_url = gdata_login.get_album_url(config.album_name)
 
-    albums = picasa.GetUserFeed(user=config.username)
-       
-    for album in albums.entry:
-      if album.title.text==config.album_name:
-        album_url = '/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text)
     
     upload_queue = Queue.Queue()
-    uploadThread = background_upload(picasa, album_url, upload_queue)
+    uploadThread = background_upload(gdata_login.picasa, 
+                                     album_url, 
+                                     upload_queue, 
+                                     "FullUploader")
     uploadThread.start()
     
-    logging.debug("Kick off")    
+    # do we need to upload the 100x75 thumbnails too?
+    # If so spawn another thread + queue to handle that
+    if (config.upload_scratch_pics):
+        album_url_thumbs = gdata_login.get_album_url(config.album_name + "_thumbs")
+        upload_queue_thumbs = Queue.Queue()
+        uploadThread_thumbs = background_upload(gdata_login.picasa, 
+                                                album_url_thumbs, 
+                                                upload_queue_thumbs, 
+                                                "ThumbUploader")
+        uploadThread_thumbs.start()
+        
+
     #get an image to kick the process off with
     image1, buffer1, file_handle = captureTestImage(config.rotation)
 
@@ -153,7 +197,8 @@ def main():
     # TODO: requires cleanup
     while (cur_time - start_time < config.loop_hrs):
         # Get comparison image
-        logging.debug("Current queue size %d" % upload_queue.qsize())
+        logging.debug("Current queue size FullUp:%d ThumbUp:%d" % \
+                                (upload_queue.qsize(), upload_queue_thumbs.qsize()))
         image2, buffer2, file_handle = captureTestImage(config.rotation)
         
         # Count changed pixels
@@ -169,9 +214,9 @@ def main():
             # If movement sensitivity exceeded, upload image and
             # Exit before full image scan complete
             if changedPixels > config.sensitivity:
-                # the test image is quite low res, but we might as well upload it
-                logging.debug("low rez queue push")
-                upload_queue.put(file_handle)
+                if (config.upload_scratch_pics):
+                    logging.debug("low rez queue push")
+                    upload_queue_thumbs.put(file_handle)
                 lastCapture = time.time()
                 uploadImage(upload_queue, config.rotation, config.upload_quality)
                 break

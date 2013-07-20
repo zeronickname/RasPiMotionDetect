@@ -2,9 +2,10 @@
 email    = user.name@gmail.com      ; google email
 username = user.name                ; google username. Typically the bit before @gmail.com
 password = password                 ; Password. If using 2FA, create a single use password
-album_name = RasPiInterval          ; Picasa album Name
+album_name = RasPiMotionDetect      ; Picasa album Name. It will be created if it does not exist
 
 [CONFIG]
+upload_scratch_pics = yes   ; do we also upload the 100x75 pic taken for the motion detect?
 hrs_to_loop = 8             ; this is approximate and can be upto 1hr out
 interval = 15               ; unused
 picture_threshold = 15      ; how much the pixel has changed by before it's marked as different

@@ -1,17 +1,17 @@
-# original motion detection code from 
-# http://www.raspberrypi.org/phpBB3/viewtopic.php?p=358259#p362915
+#! /usr/bin/python
 
+import logging
+import optparse, ConfigParser
 
 import gdata.photos.service
-import time, os, StringIO, subprocess
-import ConfigParser
+import time, os, subprocess, tempfile
 from PIL import Image
 import threading, Queue
-
-from subprocess import call
 from datetime import datetime
 
+                 
 
+# thread that runs in the background uploading pics to Picasa
 class background_upload(threading.Thread):
     def __init__ (self, picasa, album_url, q):
         self.picasa = picasa
@@ -19,80 +19,142 @@ class background_upload(threading.Thread):
         self.q = q
         threading.Thread.__init__ (self)
         self.daemon = True
-   
+
+    def check_type(self, filehandle):
+        extension = os.path.splitext(filehandle.name)[1][1:]
+        if (extension == 'jpg'):
+            pic_type='image/jpeg'
+        else:
+            pic_type='image/bmp'
+
+        return pic_type
+    
+
     def run(self):
         while True:
-            filename = self.q.get()
-            photo = self.picasa.InsertPhotoSimple(self.album_url,'New Photo','',filename,content_type='image/jpeg')
+            logging.debug("Wait on queue")
+            filehandle = self.q.get()
+            logging.debug("popped one off the queue")
+            pic_type='image/jpeg'
+            pic_type = self.check_type(filehandle)
+            photo = self.picasa.InsertPhotoSimple(self.album_url,
+                                                  'Movement Detected',
+                                                  '',
+                                                  filehandle,
+                                                  content_type=pic_type)
+            logging.debug("Pic uploaded to Picasa")
+
+
+# reads config parameters from config.ini
+class ConfigRead:
+    def __init__(self, filepath):
+        config = ConfigParser.ConfigParser()
+        # read contents of config.ini from the same directory as the script itself
+        config.read(filepath)
+
+        self.email    = config.get('LOGIN','email')
+        self.password = config.get('LOGIN','password')
+        self.username = config.get('LOGIN','username')
+        self.album_name = config.get('LOGIN','album_name')
+        
+        self.loop_hrs = config.getint('CONFIG','hrs_to_loop')
+
+        # currently unused. Maybe useful at some later point.
+        self.interval = config.getint('CONFIG','interval')
+            
+        self.threshold = config.getint('CONFIG','picture_threshold')
+        self.sensitivity = config.getint('CONFIG','picture_sensitivity')
+        self.forceCaptureTime = config.getint('CONFIG','forceCaptureTime')
+
+        self.upload_quality = config.getint('PICTURE','upload_quality')
+        self.rotation = config.getint('PICTURE','camera_rotation')
 
 
 # Capture a small test image (for motion detection)
-def captureTestImage():
-    command = "raspistill -rot 180 -w %s -h %s -t 0 -e bmp -o -" % (100, 75)
-    imageData = StringIO.StringIO()
-    imageData.write(subprocess.check_output(command, shell=True))
-    imageData.seek(0)
-    im = Image.open(imageData)
+def captureTestImage(rotation):
+    command = "raspistill -rot %s -w %s -h %s -t 0 -e bmp -o -" % (rotation, 100, 75)
+    temp_file = tempfile.NamedTemporaryFile(suffix='.bmp')
+    temp_file.write(subprocess.check_output(command, shell=True))
+    temp_file.seek(0)
+    im = Image.open(temp_file)
     buffer = im.load()
-    return im, buffer, imageData
+    return im, buffer, temp_file
 
 # capture and upload a full size image to Picasa
-def uploadImage(queue):
-    command = "raspistill -rot 180 -w 2048 -o -"
-    imageData = StringIO.StringIO()
-    imageData.write(subprocess.check_output(command, shell=True))
-    imageData.seek(0)
-    queue.put(imageData)
+def uploadImage(queue, rotation, upload_quality):
+    command = "raspistill -rot %s -w 2048 -h 1536 -t 0 -e jpg -q %s -o -" % (rotation, upload_quality)
+    temp_file = tempfile.NamedTemporaryFile(suffix='.jpg')
+    temp_file.write(subprocess.check_output(command, shell=True))
+    temp_file.seek(0)
+    logging.debug("hirez queue push")
+    queue.put(temp_file)
+    
+
+
+# sets up default logging levels based on command line parameters
+# based on code from:
+# http://web.archive.org/web/20120819135307/http://aymanh.com/python-debugging-techniques
+
+LOGGING_LEVELS = {'critical': logging.CRITICAL,
+                  'error': logging.ERROR,
+                  'warning': logging.WARNING,
+                  'info': logging.INFO,
+                  'debug': logging.DEBUG}
+                  
+def loglvl_setup():
+    parser = optparse.OptionParser()
+    parser.add_option('-l', '--logging-level', help='Logging level')
+    parser.add_option('-f', '--logging-file', help='Logging file name')
+    (options, args) = parser.parse_args()
+    logging_level = LOGGING_LEVELS.get(options.logging_level, logging.NOTSET)
+    logging.basicConfig(level=logging_level, filename=options.logging_file,
+                      format='%(asctime)s %(levelname)s: %(message)s',
+                      datefmt='%Y-%m-%d %H:%M:%S')
 
 
 def main():
-    config = ConfigParser.ConfigParser()
-    # read contents of config.ini from the same directory as the script itself
-    config.read(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'config.ini'))
-
-    email    = config.get('LOGIN','email')
-    password = config.get('LOGIN','password')
-    username = config.get('LOGIN','username')
-
-    album_name = config.get('CONFIG','album_name')
-    loop_hrs = config.getint('CONFIG','hrs_to_loop')
-
-    # currently unused. Maybe useful at come later point.
-    interval = config.getint('CONFIG','interval')
-        
-    threshold = config.getint('CONFIG','picture_threshold')
-    sensitivity = config.getint('CONFIG','picture_sensitivity')
-    forceCaptureTime = config.getint('CONFIG','forceCaptureTime')
-
+    loglvl_setup()
+    
+    logging.debug("Starting up....")
+    config = ConfigRead(os.path.join(
+                        os.path.dirname(
+                        os.path.realpath(
+                        __file__)),
+                        'config.ini'))
 
     start_time = datetime.now().time().hour 
     cur_time = datetime.now().time().hour
 
-    picasa = gdata.photos.service.PhotosService(email=email,password=password)
+    logging.debug("Login to Picasa")
+    picasa = gdata.photos.service.PhotosService(email=config.email,
+                                                password=config.password)
     picasa.ProgrammaticLogin()
-    #album = picasa.InsertAlbum(title="Python Test", summary="test summary", access="private")
 
-    albums = picasa.GetUserFeed(user=username)
+    albums = picasa.GetUserFeed(user=config.username)
        
     for album in albums.entry:
-      if album.title.text==album_name:
+      if album.title.text==config.album_name:
         album_url = '/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text)
     
     upload_queue = Queue.Queue()
     uploadThread = background_upload(picasa, album_url, upload_queue)
     uploadThread.start()
     
-        
+    logging.debug("Kick off")    
     #get an image to kick the process off with
-    image1, buffer1, imd = captureTestImage()
+    image1, buffer1, file_handle = captureTestImage(config.rotation)
 
     # Reset last capture time
     lastCapture = time.time()
 
-
-    while (cur_time - start_time < loop_hrs):
+    # main loop
+    # original motion detection code from 
+    # http://www.raspberrypi.org/phpBB3/viewtopic.php?p=358259#p362915
+    # TODO: requires cleanup
+    while (cur_time - start_time < config.loop_hrs):
         # Get comparison image
-        image2, buffer2, imd = captureTestImage()
+        logging.debug("Current queue size %d" % upload_queue.qsize())
+        image2, buffer2, file_handle = captureTestImage(config.rotation)
         
         # Count changed pixels
         changedPixels = 0
@@ -101,22 +163,24 @@ def main():
             for y in xrange(0, 75):
                 # Just check green channel as it's the highest quality channel
                 pixdiff = abs(buffer1[x,y][1] - buffer2[x,y][1])
-                if pixdiff > threshold:
+                if pixdiff > config.threshold:
                     changedPixels += 1
 
             # If movement sensitivity exceeded, upload image and
             # Exit before full image scan complete
-            if changedPixels > sensitivity:
+            if changedPixels > config.sensitivity:
                 # the test image is quite low res, but we might as well upload it
-                upload_queue.put(imd)
+                logging.debug("low rez queue push")
+                upload_queue.put(file_handle)
                 lastCapture = time.time()
-                uploadImage(upload_queue)
+                uploadImage(upload_queue, config.rotation, config.upload_quality)
                 break
             continue    
         
         # Check force capture
-        if time.time() - lastCapture > forceCaptureTime:
-            changedPixels = sensitivity + 1            
+        if time.time() - lastCapture > config.forceCaptureTime:
+            logging.debug("Force an upload next round")
+            changedPixels = config.sensitivity + 1            
 
         # Swap comparison buffers
         image1  = image2

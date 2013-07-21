@@ -2,16 +2,16 @@
 
 import logging
 import optparse, ConfigParser
+import time, os, subprocess, tempfile, cStringIO
+import threading, Queue
 
 import gdata.photos.service
-import time, os, subprocess, tempfile, cStringIO
 from PIL import Image
-import threading, Queue
 
                  
 
-# thread that runs in the background uploading pics to Picasa
-class background_upload(threading.Thread):
+class BackgroundUpload(threading.Thread):
+    """thread that runs in the background uploading pics to Picasa"""
     def __init__ (self, picasa, album_url, q, myname):
         self.picasa = picasa
         self.album_url = album_url
@@ -52,11 +52,10 @@ class background_upload(threading.Thread):
             logging.debug("%s: Pic uploaded to Picasa" % self.myname)
 
 
-# reads config parameters from config.ini
 class ConfigRead:
+    """reads config parameters from config.ini"""
     def __init__(self, filepath):
         config = ConfigParser.ConfigParser()
-        # read contents of config.ini from the same directory as the script itself
         config.read(filepath)
 
         self.email    = config.get('LOGIN','email')
@@ -77,8 +76,9 @@ class ConfigRead:
         self.upload_quality = config.getint('PICTURE','upload_quality')
         self.rotation = config.getint('PICTURE','camera_rotation')
 
-# This class handles the gdata login + album id extraction gubbins
+
 class PicasaLogin:
+    """This class handles the gdata login + album id extraction gubbins"""
     def __init__(self, email, password, username):
         self.username = username
 
@@ -111,7 +111,7 @@ class PicasaLogin:
         return album_url
 
 # Capture a small test image (for motion detection)
-def captureTestImage(rotation):
+def capture_test_image(rotation):
     command = "raspistill -rot %s -w %s -h %s -t 0 -e bmp -o -" % (rotation, 100, 75)
     # StringIO used here as to not wear out the SD card
     # There will be a lot of these pics taken
@@ -123,7 +123,7 @@ def captureTestImage(rotation):
     return buffer, imageData
 
 # capture full-size image and add it to the queue for background upload
-def uploadImage(queue, rotation, upload_quality):
+def upload_image(queue, rotation, upload_quality):
     command = "raspistill -rot %s -w 2048 -h 1536 -t 0 -e jpg -q %s -o -" % \
                                                             (rotation, upload_quality)
     """
@@ -177,11 +177,8 @@ def main():
     logging.debug("Starting up....")
     # config.ini should be in the same location as the script
     # get script path with some os.path hackery
-    config = ConfigRead(os.path.join(
-                        os.path.dirname(
-                        os.path.realpath(
-                        __file__)),
-                        'config.ini'))
+    config_ini_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'config.ini')
+    config = ConfigRead(config_ini_path)
 
     end_time = time.time() + (config.loop_hrs*60*60)
 
@@ -190,8 +187,9 @@ def main():
     album_url = gdata_login.get_album_url(config.album_name)
 
     
+    logging.debug("Setup Threads & Queues")
     upload_queue = Queue.Queue()
-    uploadThread = background_upload(gdata_login.picasa, 
+    uploadThread = BackgroundUpload(gdata_login.picasa, 
                                      album_url, 
                                      upload_queue, 
                                      "FullUploader")
@@ -202,7 +200,7 @@ def main():
     if (config.upload_scratch_pics):
         album_url_thumbs = gdata_login.get_album_url(config.album_name + "_thumbs")
         upload_queue_thumbs = Queue.Queue()
-        uploadThread_thumbs = background_upload(gdata_login.picasa, 
+        uploadThread_thumbs = BackgroundUpload(gdata_login.picasa, 
                                                 album_url_thumbs, 
                                                 upload_queue_thumbs, 
                                                 "ThumbUploader")
@@ -213,7 +211,7 @@ def main():
         
 
     #get an image to kick the process off with
-    buffer1, file_handle = captureTestImage(config.rotation)
+    buffer1, file_handle = capture_test_image(config.rotation)
 
     # Reset last capture time
     lastCapture = time.time()
@@ -222,12 +220,13 @@ def main():
     # original motion detection code from 
     # http://www.raspberrypi.org/phpBB3/viewtopic.php?p=358259#p362915
     # TODO: requires cleanup
+    logging.debug("Main Loop start")
     while (time.time() < end_time):
         # Get comparison image
         logging.debug("Current queue size FullSize:%d ThumbSize:%d" % \
                                    (upload_queue.qsize(), 
                                    (upload_queue_thumbs.qsize() if upload_queue_thumbs else 0) ))
-        buffer2, file_handle = captureTestImage(config.rotation)
+        buffer2, file_handle = capture_test_image(config.rotation)
         
         # Count changed pixels
         changedPixels = 0
@@ -253,7 +252,7 @@ def main():
                     upload_queue_thumbs.put(file_handle)
                 lastCapture = time.time()
                 # Take a full size picture and farm it off for background upload
-                uploadImage(upload_queue, config.rotation, config.upload_quality)
+                upload_image(upload_queue, config.rotation, config.upload_quality)
                 break
             continue    
         

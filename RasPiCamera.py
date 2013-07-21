@@ -12,13 +12,14 @@ from PIL import Image
 
 class BackgroundUpload(threading.Thread):
     """thread that runs in the background uploading pics to Picasa"""
-    def __init__ (self, picasa, album_url, q, myname):
+    def __init__ (self, picasa, album_url, q, name_prefix, myname):
         self.picasa = picasa
         self.album_url = album_url
         self.q = q
         threading.Thread.__init__ (self)
         self.daemon = True
         self.myname = myname
+        self.name_prefix = name_prefix
 
     def check_type(self, filehandle):
         """
@@ -44,8 +45,9 @@ class BackgroundUpload(threading.Thread):
             filehandle = self.q.get()
             logging.debug("%s: popped one off the queue" % self.myname)
             pic_type = self.check_type(filehandle)
+            picasa_filename = self.name_prefix + time.strftime(" - %H:%M:%S")
             photo = self.picasa.InsertPhotoSimple(self.album_url,
-                                                  'Movement Detected',
+                                                  picasa_filename,
                                                   '',
                                                   filehandle,
                                                   content_type=pic_type)
@@ -73,6 +75,7 @@ class ConfigRead:
         self.forceCaptureTime = config.getint('CONFIG','forceCaptureTime')
         self.upload_scratch_pics = config.getboolean('CONFIG','upload_scratch_pics')
 
+        self.name_prefix = config.get('PICTURE','name_prefix')
         self.upload_quality = config.getint('PICTURE','upload_quality')
         self.rotation = config.getint('PICTURE','camera_rotation')
 
@@ -191,7 +194,8 @@ def main():
     upload_queue = Queue.Queue()
     uploadThread = BackgroundUpload(gdata_login.picasa, 
                                      album_url, 
-                                     upload_queue, 
+                                     upload_queue,
+                                     config.name_prefix, 
                                      "FullUploader")
     uploadThread.start()
     
@@ -202,7 +206,8 @@ def main():
         upload_queue_thumbs = Queue.Queue()
         uploadThread_thumbs = BackgroundUpload(gdata_login.picasa, 
                                                 album_url_thumbs, 
-                                                upload_queue_thumbs, 
+                                                upload_queue_thumbs,
+                                                config.name_prefix, 
                                                 "ThumbUploader")
         uploadThread_thumbs.start()
     else :

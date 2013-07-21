@@ -1,7 +1,7 @@
 [LOGIN]
 email    = user.name@gmail.com      ; google email
 username = user.name                ; google username. Typically the bit before @gmail.com
-password = password                 ; Password. If using 2FA, create a single use password
+password = password                 ; Password. If using 2FA, create an app specific password
 album_name = RasPiMotionDetect      ; Picasa album Name. It will be created if it does not exist
 
 [CONFIG]
@@ -13,5 +13,6 @@ picture_sensitivity = 150   ; how many pixels have changed before we decide to u
 forceCaptureTime = 3600     ; Forces an image to be captured every x seconds
 
 [PICTURE]
-camera_rotation = 180 ; degrees to rotate the photo by 
-upload_quality = 65   ; jpg compression level
+name_prefix = Motion Detected   ; Prefix for the filenames uploaded to Picasa
+camera_rotation = 180           ; degrees to rotate the photo by 
+upload_quality = 65             ; jpg compression level

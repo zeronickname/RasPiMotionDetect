@@ -6,7 +6,7 @@ album_name = RasPiMotionDetect      ; Picasa album Name. It will be created if i
 
 [CONFIG]
 upload_scratch_pics = no    ; do we also upload the 100x75 pic taken for the motion detect?
-hrs_to_loop = 8             ; this is approximate and can be upto 1hr out
+hrs_to_loop = 8             ; this is approximate
 interval = 15               ; unused
 picture_threshold = 15      ; how much the pixel has changed by before it's marked as different
 picture_sensitivity = 150   ; how many pixels have changed before we decide to upload

@@ -7,7 +7,6 @@ import gdata.photos.service
 import time, os, subprocess, tempfile, cStringIO
 from PIL import Image
 import threading, Queue
-from datetime import datetime
 
                  
 
@@ -184,8 +183,7 @@ def main():
                         __file__)),
                         'config.ini'))
 
-    start_time = datetime.now().time().hour 
-    cur_time = datetime.now().time().hour
+    end_time = time.time() + (config.loop_hrs*60*60)
 
     logging.debug("Login to Picasa")
     gdata_login = PicasaLogin(config.email, config.password, config.username)
@@ -224,7 +222,7 @@ def main():
     # original motion detection code from 
     # http://www.raspberrypi.org/phpBB3/viewtopic.php?p=358259#p362915
     # TODO: requires cleanup
-    while (cur_time - start_time < config.loop_hrs):
+    while (time.time() < end_time):
         # Get comparison image
         logging.debug("Current queue size FullSize:%d ThumbSize:%d" % \
                                    (upload_queue.qsize(), 
@@ -266,8 +264,6 @@ def main():
 
         # Swap comparison buffers
         buffer1 = buffer2
-        
-        cur_time = datetime.now().time().hour
 
 
 if __name__ == '__main__':

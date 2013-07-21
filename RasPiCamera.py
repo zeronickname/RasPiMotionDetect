@@ -4,7 +4,7 @@ import logging
 import optparse, ConfigParser
 
 import gdata.photos.service
-import time, os, subprocess, tempfile
+import time, os, subprocess, tempfile, cStringIO
 from PIL import Image
 import threading, Queue
 from datetime import datetime
@@ -22,11 +22,19 @@ class background_upload(threading.Thread):
         self.myname = myname
 
     def check_type(self, filehandle):
+        """
+        Calling:
         extension = os.path.splitext(filehandle.name)[1][1:]
-        if (extension == 'jpg'):
-            pic_type='image/jpeg'
-        else:
+        would be nice, but won't work on a StringIO buffer. Take the lazy
+        option and if it's a StringIO buffer, assume it's a bmp :)
+        we could, of course, just use self.myname; but I'd rather use that
+        just for debug (and remove self.myname sometime in future.)
+        """
+        
+        if (isinstance(filehandle, cStringIO.OutputType)):
             pic_type='image/bmp'
+        else:
+            pic_type='image/jpeg'
 
         return pic_type
     
@@ -106,17 +114,35 @@ class PicasaLogin:
 # Capture a small test image (for motion detection)
 def captureTestImage(rotation):
     command = "raspistill -rot %s -w %s -h %s -t 0 -e bmp -o -" % (rotation, 100, 75)
-    temp_file = tempfile.NamedTemporaryFile(suffix='.bmp')
-    temp_file.write(subprocess.check_output(command, shell=True))
-    temp_file.seek(0)
-    im = Image.open(temp_file)
+    # StringIO used here as to not wear out the SD card
+    # There will be a lot of these pics taken
+    imageData = cStringIO.StringIO()
+    imageData.write(subprocess.check_output(command, shell=True))
+    imageData.seek(0)
+    im = Image.open(imageData)
     buffer = im.load()
-    return buffer, temp_file
+    return buffer, imageData
 
-# capture and upload a full size image to Picasa
+# capture full-size image and add it to the queue for background upload
 def uploadImage(queue, rotation, upload_quality):
     command = "raspistill -rot %s -w 2048 -h 1536 -t 0 -e jpg -q %s -o -" % \
                                                             (rotation, upload_quality)
+    """
+    These files are >1.5Mb in size and the upload happens in a background thread. 
+    We can't get the background thread to take the picture as only one thread can
+    access the camera. So we take the picture here and send just the handle to the 
+    background thread.
+    Using a StringIO here (like above, to save disk writes) would be a bad idea for
+    two reasons:
+    (a) Now we need to send the entire StringIO buffer via the queue
+        Large memory consumption (compared to the 100x75 pics above)
+    (b) The upload takes a lot of time and if there is lots of motion, there
+        will be lots of items in the queue. Again, allowing the memory 
+        consumption to spiral out of control
+    
+    So, use a tempfile, which does write to disk, but it auto cleans up/deletes
+    after the filehandle goes out of scope
+    """
     temp_file = tempfile.NamedTemporaryFile(suffix='.jpg')
     temp_file.write(subprocess.check_output(command, shell=True))
     temp_file.seek(0)
@@ -216,8 +242,15 @@ def main():
             if changedPixels > config.sensitivity:
                 if (config.upload_scratch_pics):
                     logging.debug("low rez queue push")
+                    """
+                    Note that we're going to dump the entire StringIO buffer 
+                    into the queue for upload. As the picture size is 100x75, 
+                    the upload's happen quickly; stopping the queue 
+                    from consuming too much memory
+                    """
                     upload_queue_thumbs.put(file_handle)
                 lastCapture = time.time()
+                # Take a full size picture and farm it off for background upload
                 uploadImage(upload_queue, config.rotation, config.upload_quality)
                 break
             continue    

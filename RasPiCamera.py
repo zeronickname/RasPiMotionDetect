@@ -209,6 +209,9 @@ def main():
                                                 upload_queue_thumbs, 
                                                 "ThumbUploader")
         uploadThread_thumbs.start()
+    else :
+        # This just helps with logging logic later in the code
+        upload_queue_thumbs = 0
         
 
     #get an image to kick the process off with
@@ -223,8 +226,9 @@ def main():
     # TODO: requires cleanup
     while (cur_time - start_time < config.loop_hrs):
         # Get comparison image
-        logging.debug("Current queue size FullUp:%d ThumbUp:%d" % \
-                                (upload_queue.qsize(), upload_queue_thumbs.qsize()))
+        logging.debug("Current queue size FullSize:%d ThumbSize:%d" % \
+                                   (upload_queue.qsize(), 
+                                   (upload_queue_thumbs.qsize() if upload_queue_thumbs else 0) ))
         buffer2, file_handle = captureTestImage(config.rotation)
         
         # Count changed pixels

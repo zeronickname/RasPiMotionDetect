@@ -102,11 +102,9 @@ class ConfigRead:
         self.email    = config.get('LOGIN','email')
         self.password = config.get('LOGIN','password')
         self.username = config.get('LOGIN','username')
-        self.album_name = config.get('LOGIN','album_name')
-        self.album_name = self.album_name # + time.strftime(" - %d-%m-%y")
         
-        self.loop_hrs = config.getint('CONFIG','hrs_to_loop')
-            
+        
+        self.loop_hrs = config.getint('CONFIG','hrs_to_loop')            
         self.threshold = config.getint('CONFIG','picture_threshold')
         self.sensitivity = config.getint('CONFIG','picture_sensitivity')
         self.forceCapture = config.getboolean('CONFIG','forceCapture')
@@ -115,8 +113,10 @@ class ConfigRead:
         self.scratchImageWidth = config.getint('CONFIG','scratchImageWidth')
         self.scratchImageHeight = config.getint('CONFIG','scratchImageHeight')
         
-        self.name_prefix = config.get('PICTURE','name_prefix')
         
+        self.name_prefix = config.get('PICTURE','file_name_prefix')
+        self.album_name = config.get('PICTURE','album_name') \
+                          + time.strftime(config.get('PICTURE','album_name_suffix'))
         self.rotation = config.getint('PICTURE','camera_rotation')
         self.cam_options = config.get('PICTURE','cam_options')
 

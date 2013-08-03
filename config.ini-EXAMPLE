@@ -2,7 +2,7 @@
 email    = user.name@gmail.com      ; google email
 username = user.name                ; google username. Typically the bit before @gmail.com
 password = password                 ; Password. If using 2FA, create an app specific password
-album_name = RasPiMotionDetect      ; Picasa album Name. It will be created if it does not exist
+
 
 [CONFIG]
 scratchImageWidth = 100     ; The smaller this is the quicker we can  check pixels & lower the memory use
@@ -15,8 +15,14 @@ forceCapture = True         ; Force an intervelometer mode?
 forceCaptureTime = 3600     ; How often (in seconds) do we force an image capture?
 
 [PICTURE]
-name_prefix = Motion Detected   ; Prefix for the filenames uploaded to Picasa
-camera_rotation = 0             ; degrees to rotate the photo by 
+album_name = RasPiMotionDetect      ; Picasa album Name. It will be created if it does not exist
+
+# anything allowed by strftime can be used for formatting here
+# http://docs.python.org/2/library/time.html#time.strftime
+# if you dont want a suffix, just set it to ""
+album_name_suffix = _%d-%m-%y       ; On the 3rd Aug, album name will be "RasPiMotionDetect_03-07-13"
+file_name_prefix = Motion Detected  ; Prefix for the filenames uploaded to Picasa
+camera_rotation = 0                 ; degrees to rotate the photo by 
 
 # any other options you might want to pass to raspistill
 # https://github.com/raspberrypi/userland/tree/master/host_applications/linux/apps/raspicam#camera-control-options

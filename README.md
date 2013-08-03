@@ -19,7 +19,7 @@ PreRequisites
 * Python 2.x
 * Python Imaging Library (PIL)
 
-        apt-get install python-imaging
+        apt-get install python-imaging-tk
         
 * gdata-python-client, downloaded and installed
 

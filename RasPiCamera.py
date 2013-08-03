@@ -12,8 +12,9 @@ from PIL import Image
 
 class BackgroundUpload(threading.Thread):
     """thread that runs in the background uploading pics to Picasa"""
-    def __init__ (self, picasa, album_url, q, name_prefix, myname):
-        self.picasa = picasa
+    def __init__ (self, gdata, album_url, q, name_prefix, myname):
+        self.gdata = gdata
+        self.picasa = gdata.picasa
         self.album_url = album_url
         self.q = q
         threading.Thread.__init__ (self)
@@ -46,13 +47,23 @@ class BackgroundUpload(threading.Thread):
             logging.debug("%s: popped one off the queue" % self.myname)
             pic_type = self.check_type(filehandle)
             picasa_filename = self.name_prefix + time.strftime(" - %H:%M:%S")
-            photo = self.picasa.InsertPhotoSimple(self.album_url,
-                                                  picasa_filename,
-                                                  '',
-                                                  filehandle,
-                                                  content_type=pic_type)
-            logging.debug("%s: Pic uploaded to Picasa" % self.myname)
-            self.q.task_done()
+            
+            while True:
+                try:                    
+                    photo = self.picasa.InsertPhotoSimple(self.album_url,
+                                                          picasa_filename,
+                                                          '',
+                                                          filehandle,
+                                                          content_type=pic_type)
+                    logging.debug("%s: Pic uploaded to Picasa" % self.myname)
+                    self.q.task_done()
+                except:
+                    # InsertPhotoSimple appears to die for some users.
+                    # my assumption is a break intheir internet. Try re-logging in
+                    while (!self.gdata.login()):
+                        time.sleep(0.5) # chill awhile
+                    continue # this will take us back to InsertPhotoSimple
+                break # no exceptions? Great carry on to wait on the queue
 
 
 class ConfigRead:
@@ -88,14 +99,18 @@ class PicasaLogin:
     """This class handles the gdata login + album id extraction gubbins"""
     def __init__(self, email, password, username):
         self.username = username
-
+        self.email = email
+        self.password = password
+    
+    def login(self):
         try:
             self.picasa = gdata.photos.service.PhotosService(email=email,
                                                 password=password)
             self.picasa.ProgrammaticLogin()
+            return True
         except GooglePhotosException as gpe:
             logging.critical("Picasa Login failed!")
-            sys.exit(gpe.message)
+            return False
     
     def get_album_url(self, album_name):
         albums = self.picasa.GetUserFeed(user=self.username)
@@ -192,12 +207,13 @@ def main():
 
     logging.debug("Login to Picasa")
     gdata_login = PicasaLogin(config.email, config.password, config.username)
+    gdata_login.login()
     album_url = gdata_login.get_album_url(config.album_name)
 
     
     logging.debug("Setup Threads & Queues")
     upload_queue = Queue.Queue()
-    uploadThread = BackgroundUpload(gdata_login.picasa, 
+    uploadThread = BackgroundUpload(gdata_login, 
                                      album_url, 
                                      upload_queue,
                                      config.name_prefix, 
@@ -209,7 +225,7 @@ def main():
     if (config.upload_scratch_pics):
         album_url_thumbs = gdata_login.get_album_url(config.album_name + "_thumbs")
         upload_queue_thumbs = Queue.Queue()
-        uploadThread_thumbs = BackgroundUpload(gdata_login.picasa, 
+        uploadThread_thumbs = BackgroundUpload(gdata_login, 
                                                 album_url_thumbs, 
                                                 upload_queue_thumbs,
                                                 config.name_prefix, 

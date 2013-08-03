@@ -7,12 +7,17 @@ album_name = RasPiMotionDetect      ; Picasa album Name. It will be created if i
 [CONFIG]
 upload_scratch_pics = no    ; do we also upload the 100x75 pic taken for the motion detect?
 hrs_to_loop = 8             ; this is approximate
-interval = 15               ; unused
 picture_threshold = 15      ; how much the pixel has changed by before it's marked as different
 picture_sensitivity = 150   ; how many pixels have changed before we decide to upload
 forceCaptureTime = 3600     ; Forces an image to be captured every x seconds
 
 [PICTURE]
 name_prefix = Motion Detected   ; Prefix for the filenames uploaded to Picasa
-camera_rotation = 180           ; degrees to rotate the photo by 
-upload_quality = 65             ; jpg compression level
+camera_rotation = 0             ; degrees to rotate the photo by 
+
+# any other options you might want to pass to raspistill
+# https://github.com/raspberrypi/userland/tree/master/host_applications/linux/apps/raspicam#camera-control-options
+# Note the -t 0 allows the RPi to tke a picture immediately, but this impacts quality. 5s is the default
+# technically rotation should be here, but I found it useful enough to split it into an option by itself above.
+cam_options = -t 0 -q 65
+                                

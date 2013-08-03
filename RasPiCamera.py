@@ -52,6 +52,7 @@ class BackgroundUpload(threading.Thread):
                                                   filehandle,
                                                   content_type=pic_type)
             logging.debug("%s: Pic uploaded to Picasa" % self.myname)
+            self.q.task_done()
 
 
 class ConfigRead:
@@ -64,11 +65,9 @@ class ConfigRead:
         self.password = config.get('LOGIN','password')
         self.username = config.get('LOGIN','username')
         self.album_name = config.get('LOGIN','album_name')
+        self.album_name = self.album_name + time.strftime(" - %d-%m-%y")
         
         self.loop_hrs = config.getint('CONFIG','hrs_to_loop')
-
-        # currently unused. Maybe useful at some later point.
-        self.interval = config.getint('CONFIG','interval')
             
         self.threshold = config.getint('CONFIG','picture_threshold')
         self.sensitivity = config.getint('CONFIG','picture_sensitivity')
@@ -76,8 +75,13 @@ class ConfigRead:
         self.upload_scratch_pics = config.getboolean('CONFIG','upload_scratch_pics')
 
         self.name_prefix = config.get('PICTURE','name_prefix')
-        self.upload_quality = config.getint('PICTURE','upload_quality')
+        
         self.rotation = config.getint('PICTURE','camera_rotation')
+        self.cam_options = config.get('PICTURE','cam_options')
+        
+        # don't print the LOGIN section!
+        logging.debug(config._sections['CONFIG'])
+        logging.debug(config._sections['PICTURE'])
 
 
 class PicasaLogin:
@@ -96,7 +100,7 @@ class PicasaLogin:
     def get_album_url(self, album_name):
         albums = self.picasa.GetUserFeed(user=self.username)
         album_url = None
-           
+        
         for album in albums.entry:
           if album.title.text==album_name:
             album_url = '/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text)
@@ -126,9 +130,10 @@ def capture_test_image(rotation):
     return buffer, imageData
 
 # capture full-size image and add it to the queue for background upload
-def upload_image(queue, rotation, upload_quality):
-    command = "raspistill -rot %s -w 2048 -h 1536 -t 0 -e jpg -q %s -o -" % \
-                                                            (rotation, upload_quality)
+def upload_image(queue, config):
+    command = "raspistill -rot %s -w 2048 -h 1536 -e jpg %s -o -" % \
+                            (config.rotation, config.cam_options)
+        
     """
     These files are >1.5Mb in size and the upload happens in a background thread. 
     We can't get the background thread to take the picture as only one thread can
@@ -257,7 +262,7 @@ def main():
                     upload_queue_thumbs.put(file_handle)
                 lastCapture = time.time()
                 # Take a full size picture and farm it off for background upload
-                upload_image(upload_queue, config.rotation, config.upload_quality)
+                upload_image(upload_queue, config)
                 break
             continue    
         
@@ -269,6 +274,9 @@ def main():
         # Swap comparison buffers
         buffer1 = buffer2
 
+    logging.info("Wait until all pictures are uploaded")
+    upload_queue.join()
+    logging.debug("Exiting.....")
 
 if __name__ == '__main__':
     main()

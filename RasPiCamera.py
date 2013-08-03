@@ -8,7 +8,7 @@ import threading, Queue
 import gdata.photos.service
 from PIL import Image
 
-                 
+
 
 class BackgroundUpload(threading.Thread):
     """thread that runs in the background uploading pics to Picasa"""
@@ -75,6 +75,11 @@ class ConfigRead:
         config = ConfigParser.ConfigParser()
         config.read(filepath)
 
+        # don't print the LOGIN section!
+        logging.debug(config._sections['CONFIG'])
+        logging.debug(config._sections['PICTURE'])
+
+
         self.email    = config.get('LOGIN','email')
         self.password = config.get('LOGIN','password')
         self.username = config.get('LOGIN','username')
@@ -88,17 +93,50 @@ class ConfigRead:
         self.forceCapture = config.getboolean('CONFIG','forceCapture')
         self.forceCaptureTime = config.getint('CONFIG','forceCaptureTime')
         self.upload_scratch_pics = config.getboolean('CONFIG','upload_scratch_pics')
-
+        self.scratchImageWidth = config.getint('CONFIG','scratchImageWidth')
+        self.scratchImageHeight = config.getint('CONFIG','scratchImageHeight')
+        
         self.name_prefix = config.get('PICTURE','name_prefix')
         
         self.rotation = config.getint('PICTURE','camera_rotation')
         self.cam_options = config.get('PICTURE','cam_options')
+
+        try:
+            logging.debug(config._sections['selectivescan'])
+            # this is fairly horrendous as I'm parsing the ini file
+            # and building a list of lists. I'm trying to change as little of the logic as 
+            # possible between this implementation and the one posted at:
+            # http://www.raspberrypi.org/phpBB3/viewtopic.php?p=391583#p391583
+            # Sharing core logic allows us to take further enhancements as people submit them
+            # But this is probably better in an external .py module with a variable I can import,
+            # so any errors are caught by the interpreter rather than my shaky logic :) TODO
+            items = config.items("selectivescan")
+            l = []
+            self.scanBorders = []
+            #for key, points in items:
+            for index, values in enumerate(items):
+                if (values[0] == 'scratchdebugmode'):
+                    # this is part of the same config section, but not relevant
+                    # to the list we're building. Just go round again!
+                    continue
+
+                points = map(int, values[1].split(','))
+                l.append(points)
+                if ((len(l) % 2) == 0):
+                    # every pair lists generates one area to scan
+                    self.scanBorders.append(l)
+                    l = []
+                    
+            self.scanDebugMode = config.getboolean('selectivescan','scratchDebugMode')
+            
+        except (ConfigParser.NoSectionError, KeyError):
+            self.scanBorders = [ [[1,self.scratchImageWidth],[1,self.scratchImageHeight]] ]
+            self.scanDebugMode = False
+            logging.debug("No selective scan section. Using default scanborders: %s" % self.scanBorders)
         
-        # don't print the LOGIN section!
-        logging.debug(config._sections['CONFIG'])
-        logging.debug(config._sections['PICTURE'])
-
-
+        self.scanAreaCount = len(self.scanBorders)
+        
+        
 class PicasaLogin:
     """This class handles the gdata login + album id extraction gubbins"""
     def __init__(self, email, password, username):
@@ -137,8 +175,8 @@ class PicasaLogin:
         return album_url
 
 # Capture a small test image (for motion detection)
-def capture_test_image(rotation):
-    command = "raspistill -rot %s -w %s -h %s -t 0 -e bmp -o -" % (rotation, 100, 75)
+def capture_test_image(config):
+    command = "raspistill -rot %s -w %s -h %s -t 0 -e bmp -o -" % (config.rotation, config.scratchImageWidth, config.scratchImageHeight)
     # StringIO used here as to not wear out the SD card
     # There will be a lot of these pics taken
     imageData = cStringIO.StringIO()
@@ -204,8 +242,8 @@ def main():
     logging.debug("Starting up....")
     # config.ini should be in the same location as the script
     # get script path with some os.path hackery
-    config_ini_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'config.ini')
-    config = ConfigRead(config_ini_path)
+    current_path = os.path.dirname(os.path.realpath(__file__))
+    config = ConfigRead(os.path.join(current_path,'config.ini'))
 
     end_time = time.time() + (config.loop_hrs*60*60)
 
@@ -243,7 +281,7 @@ def main():
         
 
     #get an image to kick the process off with
-    buffer1, file_handle = capture_test_image(config.rotation)
+    buffer1, file_handle = capture_test_image(config)
 
     # Reset last capture time
     lastCapture = time.time()
@@ -251,6 +289,8 @@ def main():
     # main loop
     # original motion detection code from 
     # http://www.raspberrypi.org/phpBB3/viewtopic.php?p=358259#p362915
+    # with updates from
+    # http://www.raspberrypi.org/phpBB3/viewtopic.php?p=391583#p391583
     # TODO: requires cleanup
     logging.debug("Main Loop start")
     while (time.time() < end_time):
@@ -258,37 +298,48 @@ def main():
         logging.debug("Current queue size FullSize:%d ThumbSize:%d" % \
                                    (upload_queue.qsize(), 
                                    (upload_queue_thumbs.qsize() if upload_queue_thumbs else 0) ))
-        buffer2, file_handle = capture_test_image(config.rotation)
+        buffer2, file_handle = capture_test_image(config)
         
         # Count changed pixels
         changedPixels = 0
         takePicture = False
         
-        for x in xrange(0, 100):
-            # Scan one line of image then check sensitivity for movement
-            for y in xrange(0, 75):
-                # Just check green channel as it's the highest quality channel
-                pixdiff = abs(buffer1[x,y][1] - buffer2[x,y][1])
-                if pixdiff > config.threshold:
-                    changedPixels += 1
+        if (config.scanDebugMode): # in debug mode, save a bitmap-file with marked changed pixels and with visible testarea-borders
+            debugimage = Image.new("RGB",(config.scratchImageWidth, config.scratchImageHeight))
+            debugim = debugimage.load()
 
-            # If movement sensitivity exceeded, upload image and
-            # Exit before full image scan complete
-            if changedPixels > config.sensitivity:
-                if (config.upload_scratch_pics):
-                    logging.debug("low rez queue push")
-                    """
-                    Note that we're going to dump the entire StringIO buffer 
-                    into the queue for upload. As the picture size is 100x75, 
-                    the upload's happen quickly; stopping the queue 
-                    from consuming too much memory
-                    """
-                    upload_queue_thumbs.put(file_handle)
+        for z in xrange(0, config.scanAreaCount): # = xrange(0,1) with default-values = z will only have the value of 0 = only one scan-area = whole picture
+            for x in xrange(config.scanBorders[z][0][0]-1, config.scanBorders[z][0][1]): # = xrange(0,100) with default-values
+                for y in xrange(config.scanBorders[z][1][0]-1, config.scanBorders[z][1][1]):   # = xrange(0,75) with default-values
+                    if (config.scanDebugMode):
+                        debugim[x,y] = buffer2[x,y]
+                        if ((x == config.scanBorders[z][0][0]-1) 
+                                             or (x == config.scanBorders[z][0][1]-1)
+                                             or (y == config.scanBorders[z][1][0]-1)
+                                             or (y == config.scanBorders[z][1][1]-1)):
+                            #logging.debug( "Border %s %s" % (x,y))
+                            debugim[x,y] = (0, 0, 255) # in debug mode, mark all border pixel to blue
+                    # Just check green channel as it's the highest quality channel
+                    pixdiff = abs(buffer1[x,y][1] - buffer2[x,y][1])
+                    if pixdiff > config.threshold:
+                        changedPixels += 1
+                        if (config.scanDebugMode):
+                            debugim[x,y] = (0, 255, 0) # in debug mode, mark all changed pixel to green
+                    # Save an image if pixels changed
+                    if (changedPixels > config.sensitivity):
+                        takePicture = True # will shoot the main photo later
+                    if ((config.scanDebugMode == False) and (changedPixels > config.sensitivity)):
+                        break  # break the y loop
+                if ((config.scanDebugMode == False) and (changedPixels > config.sensitivity)):
+                    break  # break the x loop
+            if ((config.scanDebugMode == False) and (changedPixels > config.sensitivity)):
+                break  # break the z loop
 
-                takePicture = True
-                break
-            continue    
         
+        if (config.scanDebugMode):
+            debugimage.save(current_path + "/debug.bmp") # save debug image as bmp
+            logging.debug("debug.bmp saved, %s changed pixels" % changedPixels)
+            
         # Check force capture
         if config.forceCapture:
             if time.time() - lastCapture > config.forceCaptureTime:
@@ -300,11 +351,32 @@ def main():
             # Take a full size picture and farm it off for background upload
             upload_image(upload_queue, config)
 
+            if (config.upload_scratch_pics):
+                logging.debug("low rez queue push")
+                """
+                Note that we're going to dump the entire StringIO buffer 
+                into the queue for upload. As the picture size is 100x75, 
+                the upload's happen quickly; stopping the queue 
+                from consuming too much memory
+                """
+                upload_queue_thumbs.put(file_handle)
+                
+                # as upload_scratch_pics is True, we upload *all* scratch pics
+                if (config.scanDebugMode):
+                    # need to convert it to a StringIO as the gdata client needs
+                    # something resembling a proper filehandle
+                    debugSIO = cStringIO.StringIO()
+                    debugimage.save(debugSIO, "BMP")
+                    upload_queue_thumbs.put(debugSIO)
+
+
         # Swap comparison buffers
         buffer1 = buffer2
 
+    # The script has run for hrs_to_loop hours. Time to quit.
     logging.info("Wait until all pictures are uploaded")
     upload_queue.join()
+    
     logging.debug("Exiting.....")
 
 if __name__ == '__main__':

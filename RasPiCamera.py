@@ -8,12 +8,17 @@ import threading, Queue
 import gdata.photos.service
 from PIL import Image
 
-MAX_PHOTOS_PER_ALBUM = 2
+# This limit of a 1000 pics per album comes from here:
+# https://support.google.com/picasa/answer/43879?hl=fi
+# But it can be any value under 1000.
+MAX_PHOTOS_PER_ALBUM = 1000
+
+
 
 class BackgroundUpload(threading.Thread):
     """thread that runs in the background uploading pics to Picasa"""
     def __init__ (self, album_params, q, name_prefix, myname):
-        self.album_params = album.params
+        self.album_params = album_params
         self.q = q
         threading.Thread.__init__ (self)
         self.daemon = True
@@ -37,6 +42,14 @@ class BackgroundUpload(threading.Thread):
             pic_type='image/jpeg'
 
         return pic_type
+
+    # Creates a new album and updates all the internal references
+    def create_next_album(self):
+        self.album_params.current_album_suffix += 1
+        self.album_params.album_name = self.album_params.unsuffixed_album_name \
+                                       + ("_%d" % self.album_params.current_album_suffix)
+        self.album_params.album_url = self.album_params.gdata.create_album(self.album_params.album_name)
+        self.album_params.num_photos = 0
     
 
     def run(self):
@@ -51,21 +64,18 @@ class BackgroundUpload(threading.Thread):
                 try:                    
                     photo = self.album_params.gdata.picasa.InsertPhotoSimple(
                                                           self.album_params.album_url,
-                                                          album_params.picasa_filename,
+                                                          picasa_filename,
                                                           '',
                                                           filehandle,
                                                           content_type=pic_type)
                     logging.debug("%s: Pic uploaded to Picasa" % self.myname)
                     filehandle.close()
                     self.q.task_done()
-                    self.album_params.num_photos++
-                    if (self.album_params.num_photos == MAX_PHOTOS_PER_ALBUM):
+                    self.album_params.num_photos += 1
+                    if (self.album_params.num_photos >= MAX_PHOTOS_PER_ALBUM):
                         # limit for the number of photos per album in Picasa.
-                        # Let's create a new album and update all the references
-                        self.album_params.album_name = self.album_params + ("_%d" % self.album_params.current_album_suffix)
-                        self.album_params.album_url = self.gdata.album_params.create_album(self.album_params.album_name)
-                        self.album_params.current_album_suffix++
-                        self.album_params.num_photo = 0
+                        logging.info("exceeded max number of photos per album. Create new one")
+                        self.create_next_album()
                     
                 except Exception as ex:
                     logging.critical("InsertPhotoSimple barfed! Exception: %s" % ex)
@@ -153,9 +163,9 @@ class PicasaAlbumParams:
         self.gdata = gdata
         self.album_name = album.title.text
         self.album_url = '/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text)
-        self.num_photos = num_photos
+        self.num_photos = int(num_photos)
         self.unsuffixed_album_name = unsuffixed_album_name
-        self.current_album_suffix = current_album_suffix
+        self.current_album_suffix = int(current_album_suffix)
 
 
 
@@ -177,25 +187,33 @@ class PicasaLogin:
             return False
     
     def get_album_url(self, album_name):
+        logging.debug('get_album_url for: %s' % album_name)
         albums = self.picasa.GetUserFeed(user=self.username)
         
         search_again = True
-        album_suffix = 0
-        temp_album_name = album_name + ("_%d" % album_suffix++)
+        album_url = None
+        temp_album_name = album_name + "_0"
+        album_suffix = 1
+        logging.debug('Searching for album %s' % temp_album_name)
         
-        while search_again:            
+        while search_again:
+          search_again = False
+          logging.debug('Album Search. Suffix is %s' % (album_suffix-1))
           for album in albums.entry:
             if album.title.text==temp_album_name:
               # Lets make sure this album is not full....
-              num_photos = album.numphotos
-              if (num_photos == MAX_PHOTOS_PER_ALBUM):
+              num_photos = int(album.numphotos.text)
+              if (num_photos >= MAX_PHOTOS_PER_ALBUM):
                 # OK... the album is full. We need to create a new album
                 # or maybe we've done this before. Lets spin around to recheck all albums
-                temp_album_name = album_name + ("_%d" % album_suffix++)
+                temp_album_name = album_name + ("_%d" % album_suffix)
+                album_suffix += 1
+                search_again = True
+                logging.debug('%d pics in this album. Switch to %s  ' % (num_photos, temp_album_name))
               else:
                 # the album has < MAX_PHOTOS_PER_ALBUM pics in it. It'll do for now!
+                logging.debug('Selecting album %s! It has %d pictures in it' % (temp_album_name, num_photos))
                 album_url = '/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text)
-                search_again = False
 
               # either way we have a match. No point going through the rest of the albums
               # without restarting from the top (if required)
@@ -203,7 +221,7 @@ class PicasaLogin:
         
         # if the album does not exist, create it!    
         if (album_url == None):
-            logging.info('Creating Album: %s ' % album_name)
+            logging.info('Album does not exist.')
             album_url = self.create_album(temp_album_name)
             num_photos = 0
 
@@ -300,12 +318,14 @@ def main():
     while (not gdata_login.login()):
         time.sleep(0.5) # chill awhile
 
-    album_params = PicasaAlbumParams(gdata_login, gdata_login.get_album_url(config.album_name))
+
+    album, num_photos, unsuffixed_album_name, current_album_suffix = gdata_login.get_album_url(config.album_name)
+    album_params = PicasaAlbumParams(gdata_login, album, num_photos, unsuffixed_album_name, current_album_suffix)
 
     
     logging.debug("Setup Threads & Queues")
     upload_queue = Queue.Queue()
-    uploadThread = BackgroundUpload(album_params
+    uploadThread = BackgroundUpload(album_params,
                                      upload_queue,
                                      config.name_prefix, 
                                      "FullUploader")
@@ -314,8 +334,9 @@ def main():
     # do we need to upload the 100x75 thumbnails too?
     # If so spawn another thread + queue to handle that
     if (config.upload_scratch_pics):
+        album, num_photos, unsuffixed_album_name, current_album_suffix = gdata_login.get_album_url(config.album_name + "_thumbs")
         album_params_thumbs = PicasaAlbumParams(
-                    gdata_login, gdata_login.get_album_url(config.album_name + "_thumbs"))
+                    gdata_login, album, num_photos, unsuffixed_album_name, current_album_suffix)
 
         upload_queue_thumbs = Queue.Queue()
         uploadThread_thumbs = BackgroundUpload(album_params_thumbs, 

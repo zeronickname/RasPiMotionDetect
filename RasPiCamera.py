@@ -83,6 +83,7 @@ class ConfigRead:
             
         self.threshold = config.getint('CONFIG','picture_threshold')
         self.sensitivity = config.getint('CONFIG','picture_sensitivity')
+        self.forceCapture = config.getboolean('CONFIG','forceCapture')
         self.forceCaptureTime = config.getint('CONFIG','forceCaptureTime')
         self.upload_scratch_pics = config.getboolean('CONFIG','upload_scratch_pics')
 
@@ -259,6 +260,8 @@ def main():
         
         # Count changed pixels
         changedPixels = 0
+        takePicture = False
+        
         for x in xrange(0, 100):
             # Scan one line of image then check sensitivity for movement
             for y in xrange(0, 75):
@@ -279,16 +282,21 @@ def main():
                     from consuming too much memory
                     """
                     upload_queue_thumbs.put(file_handle)
-                lastCapture = time.time()
-                # Take a full size picture and farm it off for background upload
-                upload_image(upload_queue, config)
+
+                takePicture = True
                 break
             continue    
         
         # Check force capture
-        if time.time() - lastCapture > config.forceCaptureTime:
-            logging.debug("Force an upload next round")
-            changedPixels = config.sensitivity + 1            
+        if config.forceCapture:
+            if time.time() - lastCapture > config.forceCaptureTime:
+                logging.debug("it's been %s seconds since last pic taken. Force it!" % lastCapture)
+                takePicture = True
+
+        if takePicture:
+            lastCapture = time.time()
+            # Take a full size picture and farm it off for background upload
+            upload_image(upload_queue, config)
 
         # Swap comparison buffers
         buffer1 = buffer2

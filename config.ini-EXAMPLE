@@ -9,7 +9,8 @@ upload_scratch_pics = no    ; do we also upload the 100x75 pic taken for the mot
 hrs_to_loop = 8             ; this is approximate
 picture_threshold = 15      ; how much the pixel has changed by before it's marked as different
 picture_sensitivity = 150   ; how many pixels have changed before we decide to upload
-forceCaptureTime = 3600     ; Forces an image to be captured every x seconds
+forceCapture = True         ; Force an intervelometer mode?
+forceCaptureTime = 3600     ; How often (in seconds) do we force an image capture?
 
 [PICTURE]
 name_prefix = Motion Detected   ; Prefix for the filenames uploaded to Picasa

@@ -58,9 +58,11 @@ class BackgroundUpload(threading.Thread):
                     logging.debug("%s: Pic uploaded to Picasa" % self.myname)
                     filehandle.close()
                     self.q.task_done()
-                except:
+                except Exception as ex:
+                    logging.critical("InsertPhotoSimple barfed! Exception: %s" % ex)
                     # InsertPhotoSimple appears to die for some users.
-                    # my assumption is a break intheir internet. Try re-logging in
+                    # my assumption is a momentary break in their internet connection. 
+                    # Try re-logging in
                     while (not self.gdata.login()):
                         time.sleep(0.5) # chill awhile
                     continue # this will take us back to InsertPhotoSimple
@@ -110,8 +112,8 @@ class PicasaLogin:
                                                 password=self.password)
             self.picasa.ProgrammaticLogin()
             return True
-        except:
-            logging.critical("Picasa Login failed!")
+        except Exception as ex:
+            logging.critical("Picasa Login failed! Exception: %s" % ex)
             return False
     
     def get_album_url(self, album_name):

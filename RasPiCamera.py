@@ -8,19 +8,18 @@ import threading, Queue
 import gdata.photos.service
 from PIL import Image
 
-
+MAX_PHOTOS_PER_ALBUM = 2
 
 class BackgroundUpload(threading.Thread):
     """thread that runs in the background uploading pics to Picasa"""
-    def __init__ (self, gdata, album_url, q, name_prefix, myname):
-        self.gdata = gdata
-        self.picasa = gdata.picasa
-        self.album_url = album_url
+    def __init__ (self, album_params, q, name_prefix, myname):
+        self.album_params = album.params
         self.q = q
         threading.Thread.__init__ (self)
         self.daemon = True
         self.myname = myname
         self.name_prefix = name_prefix
+
 
     def check_type(self, filehandle):
         """
@@ -50,20 +49,30 @@ class BackgroundUpload(threading.Thread):
             
             while True:
                 try:                    
-                    photo = self.picasa.InsertPhotoSimple(self.album_url,
-                                                          picasa_filename,
+                    photo = self.album_params.gdata.picasa.InsertPhotoSimple(
+                                                          self.album_params.album_url,
+                                                          album_params.picasa_filename,
                                                           '',
                                                           filehandle,
                                                           content_type=pic_type)
                     logging.debug("%s: Pic uploaded to Picasa" % self.myname)
                     filehandle.close()
                     self.q.task_done()
+                    self.album_params.num_photos++
+                    if (self.album_params.num_photos == MAX_PHOTOS_PER_ALBUM):
+                        # limit for the number of photos per album in Picasa.
+                        # Let's create a new album and update all the references
+                        self.album_params.album_name = self.album_params + ("_%d" % self.album_params.current_album_suffix)
+                        self.album_params.album_url = self.gdata.album_params.create_album(self.album_params.album_name)
+                        self.album_params.current_album_suffix++
+                        self.album_params.num_photo = 0
+                    
                 except Exception as ex:
                     logging.critical("InsertPhotoSimple barfed! Exception: %s" % ex)
                     # InsertPhotoSimple appears to die for some users.
                     # my assumption is a momentary break in their internet connection. 
                     # Try re-logging in
-                    while (not self.gdata.login()):
+                    while (not self.album_params.gdata.login()):
                         time.sleep(0.5) # chill awhile
                     continue # this will take us back to InsertPhotoSimple
                 break # no exceptions? Great carry on to wait on the queue
@@ -84,7 +93,7 @@ class ConfigRead:
         self.password = config.get('LOGIN','password')
         self.username = config.get('LOGIN','username')
         self.album_name = config.get('LOGIN','album_name')
-        self.album_name = self.album_name + time.strftime(" - %d-%m-%y")
+        self.album_name = self.album_name # + time.strftime(" - %d-%m-%y")
         
         self.loop_hrs = config.getint('CONFIG','hrs_to_loop')
             
@@ -132,11 +141,24 @@ class ConfigRead:
         except (ConfigParser.NoSectionError, KeyError):
             self.scanBorders = [ [[1,self.scratchImageWidth],[1,self.scratchImageHeight]] ]
             self.scanDebugMode = False
-            logging.debug("No selective scan section. Using default scanborders: %s" % self.scanBorders)
+            logging.debug("No selective scan section. Using default scanborders: %s" % \
+                                                                       self.scanBorders)
         
         self.scanAreaCount = len(self.scanBorders)
         
-        
+
+# bundled object to store some parameters for the individual threads
+class PicasaAlbumParams:
+    def __init__(self, gdata, album, num_photos, unsuffixed_album_name, current_album_suffix):
+        self.gdata = gdata
+        self.album_name = album.title.text
+        self.album_url = '/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text)
+        self.num_photos = num_photos
+        self.unsuffixed_album_name = unsuffixed_album_name
+        self.current_album_suffix = current_album_suffix
+
+
+
 class PicasaLogin:
     """This class handles the gdata login + album id extraction gubbins"""
     def __init__(self, email, password, username):
@@ -156,27 +178,53 @@ class PicasaLogin:
     
     def get_album_url(self, album_name):
         albums = self.picasa.GetUserFeed(user=self.username)
-        album_url = None
         
-        for album in albums.entry:
-          if album.title.text==album_name:
-            album_url = '/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text)
+        search_again = True
+        album_suffix = 0
+        temp_album_name = album_name + ("_%d" % album_suffix++)
+        
+        while search_again:            
+          for album in albums.entry:
+            if album.title.text==temp_album_name:
+              # Lets make sure this album is not full....
+              num_photos = album.numphotos
+              if (num_photos == MAX_PHOTOS_PER_ALBUM):
+                # OK... the album is full. We need to create a new album
+                # or maybe we've done this before. Lets spin around to recheck all albums
+                temp_album_name = album_name + ("_%d" % album_suffix++)
+              else:
+                # the album has < MAX_PHOTOS_PER_ALBUM pics in it. It'll do for now!
+                album_url = '/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text)
+                search_again = False
+
+              # either way we have a match. No point going through the rest of the albums
+              # without restarting from the top (if required)
+              break
         
         # if the album does not exist, create it!    
         if (album_url == None):
             logging.info('Creating Album: %s ' % album_name)
-            try:
-                album = self.picasa.InsertAlbum(title=album_name, summary="",access='private')
-                album_url = '/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text)
-            except GooglePhotosException as gpe:
-                logging.critical("Album creation failed!")
-                sys.exit(gpe.message)
+            album_url = self.create_album(temp_album_name)
+            num_photos = 0
 
+        return album, num_photos, album_name, (album_suffix-1)
+        
+    def create_album(self, album_name):
+        logging.info('Creating Album: %s ' % album_name)
+        try:
+            album = self.picasa.InsertAlbum(title=album_name, summary="",access='private')
+            album_url = '/data/feed/api/user/default/albumid/%s' % (album.gphoto_id.text)
+        except GooglePhotosException as gpe:
+            logging.critical("Album creation failed!")
+            sys.exit(gpe.message)
+        
         return album_url
+
 
 # Capture a small test image (for motion detection)
 def capture_test_image(config):
-    command = "raspistill -rot %s -w %s -h %s -t 0 -e bmp -o -" % (config.rotation, config.scratchImageWidth, config.scratchImageHeight)
+    command = "raspistill -rot %s -w %s -h %s -t 0 -e bmp -o -" % \
+              (config.rotation, config.scratchImageWidth, config.scratchImageHeight)
     # StringIO used here as to not wear out the SD card
     # There will be a lot of these pics taken
     imageData = cStringIO.StringIO()
@@ -252,13 +300,12 @@ def main():
     while (not gdata_login.login()):
         time.sleep(0.5) # chill awhile
 
-    album_url = gdata_login.get_album_url(config.album_name)
+    album_params = PicasaAlbumParams(gdata_login, gdata_login.get_album_url(config.album_name))
 
     
     logging.debug("Setup Threads & Queues")
     upload_queue = Queue.Queue()
-    uploadThread = BackgroundUpload(gdata_login, 
-                                     album_url, 
+    uploadThread = BackgroundUpload(album_params
                                      upload_queue,
                                      config.name_prefix, 
                                      "FullUploader")
@@ -267,10 +314,11 @@ def main():
     # do we need to upload the 100x75 thumbnails too?
     # If so spawn another thread + queue to handle that
     if (config.upload_scratch_pics):
-        album_url_thumbs = gdata_login.get_album_url(config.album_name + "_thumbs")
+        album_params_thumbs = PicasaAlbumParams(
+                    gdata_login, gdata_login.get_album_url(config.album_name + "_thumbs"))
+
         upload_queue_thumbs = Queue.Queue()
-        uploadThread_thumbs = BackgroundUpload(gdata_login, 
-                                                album_url_thumbs, 
+        uploadThread_thumbs = BackgroundUpload(album_params_thumbs, 
                                                 upload_queue_thumbs,
                                                 config.name_prefix, 
                                                 "ThumbUploader")

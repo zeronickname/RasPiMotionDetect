@@ -28,4 +28,6 @@ PreRequisites
 TODO
 ----
 
-Not a whole lot. It does what I want it to do. It would be nice to allow uploads to other online providers. The code could also do with a bit of a cleanup.
+* Incorporate [Kesthal's](http://www.raspberrypi.org/phpBB3/viewtopic.php?p=391583#p391583) updates for only looking at a part of the image for motion.
+* Picasa has a [1000 photo limit](https://support.google.com/picasa/answer/43879?hl=fi). Need to add some checks to ensure we don't go over this, and if we do, create a new album and carry on.
+* It would be nice to allow uploads to other online providers. The code could also do with a bit of a cleanup.

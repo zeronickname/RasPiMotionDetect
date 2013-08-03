@@ -56,6 +56,7 @@ class BackgroundUpload(threading.Thread):
                                                           filehandle,
                                                           content_type=pic_type)
                     logging.debug("%s: Pic uploaded to Picasa" % self.myname)
+                    filehandle.close()
                     self.q.task_done()
                 except:
                     # InsertPhotoSimple appears to die for some users.

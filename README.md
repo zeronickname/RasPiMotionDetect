@@ -3,8 +3,9 @@ Intro
 
 This started off as a simple Intervalometer, but I pretty quickly came to the conclusion that without motion detection, a naive implementation of an intervalometer is kindof useless. You just wind up with either a lot of pictures, or you miss the really important ones.
 
-So, this script now has some configurable parameters to tweak the motion sensitivity and as long as there is movement, it takes and uploads pics continuously to Picasa/Google Plus Photos. (python based motion detect code [originally from here](http://www.raspberrypi.org/phpBB3/viewtopic.php?p=358259#p362915))
-The script also incorporates updates ([originally posted here](http://www.raspberrypi.org/phpBB3/viewtopic.php?p=391583#p391583)) which allow you to only monitor certain parts of the image for movement. Either check out the previously linked thread (or browse config.ini-EXAMPLE for tips on how to set this up)
+So, this script now has some configurable parameters to tweak the motion sensitivity and as long as there is movement, it takes and uploads pics continuously to Picasa/Google Plus Photos. (python based motion detect code [originally from here](http://www.raspberrypi.org/phpBB3/viewtopic.php?p=358259#p362915)).
+
+The script has since been updated to only monitor certain parts of the image for movement (original code [posted here](http://www.raspberrypi.org/phpBB3/viewtopic.php?p=391583#p391583)). Check out the previously linked thread (or browse config.ini-EXAMPLE) for tips on how to set this up.
 
 Picasa was chosen as an endpoint because photos less than 2048x2048 do not count towards your storage.
 Plus google kindly stitches together similar photos to create an animated gif, which is pretty awesome!

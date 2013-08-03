@@ -10,7 +10,7 @@ scratchImageHeight = 75     ; too small and we lose too much quality. THe defaul
 upload_scratch_pics = no    ; do we also upload the 100x75 pic taken for the motion detect?
 hrs_to_loop = 8             ; this is approximate
 picture_threshold = 15      ; how much the pixel has changed by before it's marked as different
-picture_sensitivity = 150   ; how many pixels have changed before we decide to upload
+picture_sensitivity = 50    ; how many pixels have changed before we decide to upload
 forceCapture = True         ; Force an intervelometer mode?
 forceCaptureTime = 3600     ; How often (in seconds) do we force an image capture?
 
@@ -69,5 +69,5 @@ areaY1 = 1, 75
 
 # in debug mode, a file debug.bmp is written to disk with marked changed pixel an with marked border of scan-area
 # debug mode should only be turned on while testing the parameters above
-scratchDebugMode = True
+scratchDebugMode = False
 

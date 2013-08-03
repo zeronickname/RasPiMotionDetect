@@ -60,7 +60,7 @@ class BackgroundUpload(threading.Thread):
                 except:
                     # InsertPhotoSimple appears to die for some users.
                     # my assumption is a break intheir internet. Try re-logging in
-                    while (!self.gdata.login()):
+                    while (not self.gdata.login()):
                         time.sleep(0.5) # chill awhile
                     continue # this will take us back to InsertPhotoSimple
                 break # no exceptions? Great carry on to wait on the queue
@@ -104,11 +104,11 @@ class PicasaLogin:
     
     def login(self):
         try:
-            self.picasa = gdata.photos.service.PhotosService(email=email,
-                                                password=password)
+            self.picasa = gdata.photos.service.PhotosService(email=self.email,
+                                                password=self.password)
             self.picasa.ProgrammaticLogin()
             return True
-        except GooglePhotosException as gpe:
+        except:
             logging.critical("Picasa Login failed!")
             return False
     
@@ -207,7 +207,9 @@ def main():
 
     logging.debug("Login to Picasa")
     gdata_login = PicasaLogin(config.email, config.password, config.username)
-    gdata_login.login()
+    while (not gdata_login.login()):
+        time.sleep(0.5) # chill awhile
+
     album_url = gdata_login.get_album_url(config.album_name)
 
     

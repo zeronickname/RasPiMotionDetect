@@ -30,15 +30,16 @@ cam_options = -t 5 -q 65
 # Scratch-Image settings
 # comments copied verbatim from
 # http://www.raspberrypi.org/phpBB3/viewtopic.php?p=391583#p391583
-# you might want to comment directly in that thread as I just implemented 
-# Kesthal logic to the uploader (but changed to read values from config file)
+# you might want to comment directly in that thread as I just added 
+# Kesthal's logic to the uploader (and changed it to read values from an ini file)
 
 # areaX1 = start pixel on left side,end pixel on right side
 # areaX2 = start pixel on top side,stop pixel on bottom side
 # these pixels are NOT zero-based, the first pixel is 1 and the last pixel is scratchImageWidth or scratchImageHeight
 
-areaX1 = 1, 100
-areaY1 = 1, 75
+areaX1 = 1, 100     ; one side of the square to monitor for movement is from pixel 1 to pixel 100
+areaY1 = 1, 75      ; other side of square is pixel 1 to 75 -- basically the whole image!
+# Note that the final value (100,75) should not exceed scratchImageWidth & scratchImageHeight.
 
 
 # you can define areas, where the script should scan for changed pixel
@@ -49,13 +50,19 @@ areaY1 = 1, 75
 #     ........
 #
 # "." is a street or a house, "X" are trees which move arround like crazy when the wind is blowing
-# because of the wind in the trees, there will be taken photos all the time. to prevent this, your setting might look like this:
+# because of the wind in the trees, there will be taken photos all the time. to prevent this, your setting 
+# might look like this:
 # areaX1 = 1, 50
 # areaY1 = 1, 75
 # areaX2 = 51, 100
 # areaY2 = 26, 75   ; area y=1 to 25 not scanned in x=51 to 100
-# Note that the areaX# & areaY# need to be consecutive. The code does not care what you call it, just that it is sequential:)
-# Naming it areaX# & Y# is purely so it is more human redable
+# Note that the areaX# & areaY# need to be consecutive. The code does not care what you call it, 
+# just that it is sequential :) Naming it areaX# & Y# is purely so it is more human redable
+# The areas to monitor can overlap. So you can do something like:
+# areaX1 = 20, 45
+# areaY1 = 10, 60
+# areaX2 = 1, 40
+# areaY2 = 5, 50
 
 # even more complex example
 # areaX1 = 1, 39

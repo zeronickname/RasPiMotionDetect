@@ -5,10 +5,17 @@ This started off as a simple Intervalometer, but I pretty quickly came to the co
 
 So, this script now has some configurable parameters to tweak the motion sensitivity and as long as there is movement, it takes and uploads pics continuously to Picasa/Google Plus Photos. (python based motion detect code [originally from here](http://www.raspberrypi.org/phpBB3/viewtopic.php?p=358259#p362915)).
 
-The script has since been updated to only monitor certain parts of the image for movement (original code [posted here](http://www.raspberrypi.org/phpBB3/viewtopic.php?p=391583#p391583)). Check out the previously linked thread (or browse config.ini-EXAMPLE) for tips on how to set this up.
-
 Picasa was chosen as an endpoint because photos less than 2048x2048 do not count towards your storage.
 Plus google kindly stitches together similar photos to create an animated gif, which is pretty awesome!
+
+Features
+-----
+
+* Configurable motion detection sesitivity.
+* Automatically stop monitoring and exit after a set time (makes it easy to start from cron daily)
+* Monitor only parts of the image for motion (thanks [Kesthal](http://www.raspberrypi.org/phpBB3/viewtopic.php?p=391583#p391583))
+* Automatically create new albums on picasa every [1000 photos](https://support.google.com/picasa/answer/43879?hl=fi).
+
 
 PreRequisites
 --------------
@@ -30,5 +37,5 @@ PreRequisites
 TODO
 ----
 
-* Picasa has a [1000 photo limit](https://support.google.com/picasa/answer/43879?hl=fi). Need to add some checks to ensure we don't go over this, and if we do, create a new album and carry on.
-* It would be nice to allow uploads to other online providers. The code could also do with a bit of a cleanup.
+* It would be nice to allow uploads to other online providers.
+* The code definitely needs a bit of a cleanup.

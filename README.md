@@ -14,7 +14,7 @@ Features
 * Configurable motion detection sesitivity.
 * Automatically stop monitoring and exit after a set time (makes it easy to start from cron daily)
 * Monitor only parts of the image for motion (thanks [Kesthal](http://www.raspberrypi.org/phpBB3/viewtopic.php?p=391583#p391583))
-* Automatically create new albums on picasa every [1000 photos](https://support.google.com/picasa/answer/43879?hl=fi).
+* Automatically create new albums on picasa every [1000 photos](https://support.google.com/picasa/answer/43879?hl=en-GB).
 
 
 PreRequisites

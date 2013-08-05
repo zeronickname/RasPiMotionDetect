@@ -83,8 +83,8 @@ class BackgroundUpload(threading.Thread):
                     # my assumption is a momentary break in their internet connection. 
                     # Try re-logging in
                     while (not self.album_params.gdata.login()):
-                        logging.error("Re-Login failure. Try again in 500ms...")
-                        time.sleep(0.5) # chill awhile
+                        logging.error("Re-Login failure. Try again in 5s...")
+                        time.sleep(5) # chill awhile
                     continue # this will take us back to InsertPhotoSimple
                 break # no exceptions? Great carry on to wait on the queue
 

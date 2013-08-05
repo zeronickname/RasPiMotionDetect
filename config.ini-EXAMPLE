@@ -8,7 +8,7 @@ password = password                 ; Password. If using 2FA, create an app spec
 scratchImageWidth = 100     ; The smaller this is the quicker we can  check pixels & lower the memory use
 scratchImageHeight = 75     ; too small and we lose too much quality. THe defaults seem to work fine
 upload_scratch_pics = no    ; do we also upload the 100x75 pic taken for the motion detect?
-hrs_to_loop = 8             ; this is approximate
+hrs_to_loop = 8             ; this is approximate. 0 = never quit/run indefinitely
 picture_threshold = 15      ; how much the pixel has changed by before it's marked as different
 picture_sensitivity = 50    ; how many pixels have changed before we decide to upload
 forceCapture = True         ; Force an intervelometer mode?

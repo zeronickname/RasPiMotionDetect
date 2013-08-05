@@ -83,6 +83,7 @@ class BackgroundUpload(threading.Thread):
                     # my assumption is a momentary break in their internet connection. 
                     # Try re-logging in
                     while (not self.album_params.gdata.login()):
+                        logging.error("Re-Login failure. Try again in 500ms...")
                         time.sleep(0.5) # chill awhile
                     continue # this will take us back to InsertPhotoSimple
                 break # no exceptions? Great carry on to wait on the queue
@@ -302,6 +303,12 @@ def loglvl_setup():
                   datefmt='%Y-%m-%d %H:%M:%S')
 
 
+def keep_looping(end_time):
+    if (end_time == 0):
+        return True
+    else:
+        return (time.time() < end_time)
+
 def main():
     loglvl_setup()
     
@@ -311,7 +318,10 @@ def main():
     current_path = os.path.dirname(os.path.realpath(__file__))
     config = ConfigRead(os.path.join(current_path,'config.ini'))
 
-    end_time = time.time() + (config.loop_hrs*60*60)
+    if (config.loop_hrs == 0):
+        end_time = 0
+    else:
+        end_time = time.time() + (config.loop_hrs*60*60)
 
     logging.debug("Login to Picasa")
     gdata_login = PicasaLogin(config.email, config.password, config.username)
@@ -362,7 +372,7 @@ def main():
     # http://www.raspberrypi.org/phpBB3/viewtopic.php?p=391583#p391583
     # TODO: requires cleanup
     logging.debug("Main Loop start")
-    while (time.time() < end_time):
+    while (keep_looping(end_time)):
         # Get comparison image
         logging.debug("Current queue size FullSize:%d ThumbSize:%d" % \
                                    (upload_queue.qsize(), 

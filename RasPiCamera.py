@@ -70,7 +70,6 @@ class BackgroundUpload(threading.Thread):
                                                           content_type=pic_type)
                     logging.debug("%s: Pic uploaded to Picasa" % self.myname)
                     filehandle.close()
-                    os.unlink(filehandle.name)
                     self.q.task_done()
                     self.album_params.num_photos += 1
                     if (self.album_params.num_photos >= MAX_PHOTOS_PER_ALBUM):

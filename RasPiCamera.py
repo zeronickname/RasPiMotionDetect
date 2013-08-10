@@ -225,7 +225,7 @@ class PicasaLogin:
         # if the album does not exist, create it!    
         if (album_url == None):
             logging.info('Album does not exist.')
-            album_url = self.create_album(temp_album_name)
+            album_url, album = self.create_album(temp_album_name)
             num_photos = 0
 
         return album, num_photos, album_name, (album_suffix-1)
@@ -239,7 +239,7 @@ class PicasaLogin:
             logging.critical("Album creation failed!")
             sys.exit(gpe.message)
         
-        return album_url
+        return album_url, album
 
 
 # Capture a small test image (for motion detection)

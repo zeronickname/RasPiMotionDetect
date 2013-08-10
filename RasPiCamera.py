@@ -68,7 +68,7 @@ class BackgroundUpload(threading.Thread):
                                                           '',
                                                           filehandle,
                                                           content_type=pic_type)
-                    logging.debug("%s: Pic uploaded to Picasa" % self.myname)
+                    logging.debug("%s: Pic uploaded to Picasa. Photos in album: %d" % (self.myname, (self.album_params.num_photos+1)))
                     filehandle.close()
                     if (os.path.exists(filehandle.name)):
                         os.unlink(filehandle.name)

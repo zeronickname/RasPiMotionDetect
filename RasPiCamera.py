@@ -48,7 +48,7 @@ class BackgroundUpload(threading.Thread):
         self.album_params.current_album_suffix += 1
         self.album_params.album_name = self.album_params.unsuffixed_album_name \
                                        + ("_%d" % self.album_params.current_album_suffix)
-        self.album_params.album_url = self.album_params.gdata.create_album(self.album_params.album_name)
+        self.album_params.album_url, new_album = self.album_params.gdata.create_album(self.album_params.album_name)
         self.album_params.num_photos = 0
     
 

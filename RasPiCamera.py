@@ -13,6 +13,9 @@ from PIL import Image
 # But it can be any value under 1000.
 MAX_PHOTOS_PER_ALBUM = 1000
 
+# Specify the config.ini file
+INI_FILE='config.ini'
+
 
 
 class BackgroundUpload(threading.Thread):
@@ -317,8 +320,14 @@ def main():
     logging.debug("Starting up....")
     # config.ini should be in the same location as the script
     # get script path with some os.path hackery
+
+    # check if config.ini does exist
+    if not ( os.path.exists(INI_FILE)):
+        print "ERROR: config.ini does not exist...exiting"
+        return 0
+
     current_path = os.path.dirname(os.path.realpath(__file__))
-    config = ConfigRead(os.path.join(current_path,'config.ini'))
+    config = ConfigRead(os.path.join(current_path,INI_FILE))
 
     if (config.loop_hrs == 0):
         end_time = 0

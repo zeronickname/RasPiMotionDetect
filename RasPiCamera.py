@@ -244,7 +244,7 @@ class PicasaLogin:
 
 # Capture a small test image (for motion detection)
 def capture_test_image(config):
-    command = "raspistill -rot %s -w %s -h %s -t 0 -e bmp -o -" % \
+    command = "raspistill -n -rot %s -w %s -h %s -t 200 -e bmp -o -" % \
               (config.rotation, config.scratchImageWidth, config.scratchImageHeight)
     # StringIO used here as to not wear out the SD card
     # There will be a lot of these pics taken
